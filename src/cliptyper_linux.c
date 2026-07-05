@@ -9,8 +9,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#define MIN_CHAR_DELAY_MS 80
-#define MAX_CHAR_DELAY_MS 180
+#define MIN_CHAR_DELAY_MS 130
+#define MAX_CHAR_DELAY_MS 260
 #define MIN_LINE_DELAY_MS 350
 #define MAX_LINE_DELAY_MS 650
 #define UNICODE_STEP_DELAY_MS 45

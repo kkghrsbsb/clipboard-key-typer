@@ -7,8 +7,8 @@
 #include <time.h>
 #include <wchar.h>
 
-#define MIN_CHAR_DELAY_MS 80
-#define MAX_CHAR_DELAY_MS 180
+#define MIN_CHAR_DELAY_MS 130
+#define MAX_CHAR_DELAY_MS 260
 #define MIN_LINE_DELAY_MS 350
 #define MAX_LINE_DELAY_MS 650
 
@@ -87,11 +87,58 @@ static void send_enter(DWORD delay_ms) {
     Sleep(delay_ms);
 }
 
+static void send_virtual_key(WORD vk, int use_shift, DWORD delay_ms) {
+    INPUT input;
+    ZeroMemory(&input, sizeof(input));
+
+    if (use_shift) {
+        input.type = INPUT_KEYBOARD;
+        input.ki.wVk = VK_SHIFT;
+        SendInput(1, &input, sizeof(INPUT));
+        Sleep((DWORD)random_between(20, 55));
+    }
+
+    ZeroMemory(&input, sizeof(input));
+    input.type = INPUT_KEYBOARD;
+    input.ki.wVk = vk;
+    SendInput(1, &input, sizeof(INPUT));
+    Sleep((DWORD)random_between(25, 65));
+
+    input.ki.dwFlags = KEYEVENTF_KEYUP;
+    SendInput(1, &input, sizeof(INPUT));
+
+    if (use_shift) {
+        Sleep((DWORD)random_between(20, 55));
+        ZeroMemory(&input, sizeof(input));
+        input.type = INPUT_KEYBOARD;
+        input.ki.wVk = VK_SHIFT;
+        input.ki.dwFlags = KEYEVENTF_KEYUP;
+        SendInput(1, &input, sizeof(INPUT));
+    }
+
+    Sleep(delay_ms);
+}
+
+static int try_send_ascii_key(wchar_t ch, DWORD delay_ms) {
+    SHORT vk_state = VkKeyScanW(ch);
+    if (vk_state == -1) return 0;
+
+    BYTE vk = LOBYTE(vk_state);
+    BYTE state = HIBYTE(vk_state);
+    if ((state & ~(BYTE)1) != 0) return 0;
+
+    send_virtual_key((WORD)vk, (state & 1) != 0, delay_ms);
+    return 1;
+}
+
 static void type_text(const wchar_t *text) {
     for (size_t i = 0; text[i] != L'\0'; i++) {
         if (text[i] == L'\r') continue;
         if (text[i] == L'\n') {
             send_enter(random_line_delay());
+            continue;
+        }
+        if (text[i] >= 32 && text[i] <= 126 && try_send_ascii_key(text[i], random_char_delay())) {
             continue;
         }
         send_unicode_char(text[i], random_char_delay());
