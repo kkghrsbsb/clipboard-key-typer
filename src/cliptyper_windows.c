@@ -3,7 +3,27 @@
 
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 #include <wchar.h>
+
+#define MIN_CHAR_DELAY_MS 80
+#define MAX_CHAR_DELAY_MS 180
+#define MIN_LINE_DELAY_MS 350
+#define MAX_LINE_DELAY_MS 650
+
+static int random_between(int min, int max) {
+    if (max <= min) return min;
+    return min + rand() % (max - min + 1);
+}
+
+static DWORD random_char_delay(void) {
+    return (DWORD)random_between(MIN_CHAR_DELAY_MS, MAX_CHAR_DELAY_MS);
+}
+
+static DWORD random_line_delay(void) {
+    return (DWORD)random_between(MIN_LINE_DELAY_MS, MAX_LINE_DELAY_MS);
+}
 
 static wchar_t *read_clipboard_text(void) {
     if (!OpenClipboard(NULL)) return NULL;
@@ -29,7 +49,13 @@ static wchar_t *read_clipboard_text(void) {
     return copy;
 }
 
-static void send_unicode_char(wchar_t ch) {
+static void print_clipboard_stats(const wchar_t *text) {
+    size_t chars = wcslen(text);
+    printf("剪切板读取成功：约 %zu 个字符。开始模拟输入...\n", chars);
+    fflush(stdout);
+}
+
+static void send_unicode_char(wchar_t ch, DWORD delay_ms) {
     INPUT input[2];
     ZeroMemory(input, sizeof(input));
 
@@ -41,11 +67,13 @@ static void send_unicode_char(wchar_t ch) {
     input[1].ki.wScan = ch;
     input[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
 
-    SendInput(2, input, sizeof(INPUT));
-    Sleep(18);
+    SendInput(1, &input[0], sizeof(INPUT));
+    Sleep((DWORD)random_between(18, 42));
+    SendInput(1, &input[1], sizeof(INPUT));
+    Sleep(delay_ms);
 }
 
-static void send_enter(void) {
+static void send_enter(DWORD delay_ms) {
     INPUT input[2];
     ZeroMemory(input, sizeof(input));
     input[0].type = INPUT_KEYBOARD;
@@ -53,18 +81,20 @@ static void send_enter(void) {
     input[1].type = INPUT_KEYBOARD;
     input[1].ki.wVk = VK_RETURN;
     input[1].ki.dwFlags = KEYEVENTF_KEYUP;
-    SendInput(2, input, sizeof(INPUT));
-    Sleep(18);
+    SendInput(1, &input[0], sizeof(INPUT));
+    Sleep((DWORD)random_between(18, 42));
+    SendInput(1, &input[1], sizeof(INPUT));
+    Sleep(delay_ms);
 }
 
 static void type_text(const wchar_t *text) {
     for (size_t i = 0; text[i] != L'\0'; i++) {
         if (text[i] == L'\r') continue;
         if (text[i] == L'\n') {
-            send_enter();
+            send_enter(random_line_delay());
             continue;
         }
-        send_unicode_char(text[i]);
+        send_unicode_char(text[i], random_char_delay());
     }
 }
 
@@ -87,6 +117,7 @@ static void print_banner(void) {
 }
 
 int main(void) {
+    srand((unsigned int)time(NULL));
     print_banner();
 
     char input[32];
@@ -117,6 +148,7 @@ int main(void) {
             continue;
         }
 
+        print_clipboard_stats(text);
         type_text(text);
         free(text);
 

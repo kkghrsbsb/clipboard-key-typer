@@ -6,7 +6,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
+
+#define MIN_CHAR_DELAY_MS 80
+#define MAX_CHAR_DELAY_MS 180
+#define MIN_LINE_DELAY_MS 350
+#define MAX_LINE_DELAY_MS 650
+#define UNICODE_STEP_DELAY_MS 45
 
 typedef struct {
     char *data;
@@ -64,10 +71,49 @@ static char *read_clipboard(void) {
     return NULL;
 }
 
+static int random_between(int min, int max) {
+    if (max <= min) return min;
+    return min + rand() % (max - min + 1);
+}
+
+static useconds_t ms_to_us(int ms) {
+    return (useconds_t)ms * 1000;
+}
+
+static useconds_t random_char_delay(void) {
+    return ms_to_us(random_between(MIN_CHAR_DELAY_MS, MAX_CHAR_DELAY_MS));
+}
+
+static useconds_t random_line_delay(void) {
+    return ms_to_us(random_between(MIN_LINE_DELAY_MS, MAX_LINE_DELAY_MS));
+}
+
+static size_t utf8_count_chars(const char *text) {
+    size_t count = 0;
+    for (size_t i = 0; text[i] != '\0'; count++) {
+        unsigned char ch = (unsigned char)text[i];
+        if (ch < 0x80) i += 1;
+        else if ((ch & 0xE0) == 0xC0 && text[i + 1]) i += 2;
+        else if ((ch & 0xF0) == 0xE0 && text[i + 1] && text[i + 2]) i += 3;
+        else if ((ch & 0xF8) == 0xF0 && text[i + 1] && text[i + 2] && text[i + 3]) i += 4;
+        else i += 1;
+    }
+    return count;
+}
+
+static void print_clipboard_stats(const char *text) {
+    size_t bytes = strlen(text);
+    size_t chars = utf8_count_chars(text);
+    printf("剪切板读取成功：%zu 字节，约 %zu 个字符。开始模拟输入...\n", bytes, chars);
+    fflush(stdout);
+}
+
 static void press_key(Display *dpy, KeyCode keycode, int use_shift, useconds_t delay_us) {
     KeyCode shift = XKeysymToKeycode(dpy, XK_Shift_L);
     if (use_shift) XTestFakeKeyEvent(dpy, shift, True, CurrentTime);
     XTestFakeKeyEvent(dpy, keycode, True, CurrentTime);
+    XFlush(dpy);
+    usleep(ms_to_us(random_between(18, 42)));
     XTestFakeKeyEvent(dpy, keycode, False, CurrentTime);
     if (use_shift) XTestFakeKeyEvent(dpy, shift, False, CurrentTime);
     XFlush(dpy);
@@ -149,16 +195,18 @@ static void type_unicode_codepoint(Display *dpy, unsigned int cp, useconds_t del
     XTestFakeKeyEvent(dpy, ctrl, True, CurrentTime);
     XTestFakeKeyEvent(dpy, shift, True, CurrentTime);
     XTestFakeKeyEvent(dpy, u, True, CurrentTime);
+    XFlush(dpy);
+    usleep(ms_to_us(random_between(18, 42)));
     XTestFakeKeyEvent(dpy, u, False, CurrentTime);
     XTestFakeKeyEvent(dpy, shift, False, CurrentTime);
     XTestFakeKeyEvent(dpy, ctrl, False, CurrentTime);
     XFlush(dpy);
-    usleep(delay_us);
+    usleep(ms_to_us(UNICODE_STEP_DELAY_MS));
 
     char hex[16];
     snprintf(hex, sizeof(hex), "%x", cp);
     for (size_t i = 0; hex[i] != '\0'; i++) {
-        type_hex_digit(dpy, hex[i], delay_us);
+        type_hex_digit(dpy, hex[i], ms_to_us(UNICODE_STEP_DELAY_MS));
     }
 
     press_key(dpy, enter, 0, delay_us);
@@ -178,7 +226,6 @@ static int type_text(const char *text) {
         return 1;
     }
 
-    const useconds_t delay_us = 18000;
     for (size_t i = 0; text[i] != '\0';) {
         unsigned int cp = utf8_next_codepoint(text, &i);
         unsigned char ch = (unsigned char)cp;
@@ -188,17 +235,17 @@ static int type_text(const char *text) {
         if (cp == '\r') continue;
         if (cp == '\n') {
             keycode = XKeysymToKeycode(dpy, XK_Return);
-            press_key(dpy, keycode, 0, delay_us);
+            press_key(dpy, keycode, 0, random_line_delay());
             continue;
         }
         if (cp == '\t') {
             keycode = XKeysymToKeycode(dpy, XK_Tab);
-            press_key(dpy, keycode, 0, delay_us);
+            press_key(dpy, keycode, 0, random_char_delay());
             continue;
         }
 
         if (cp > 126) {
-            type_unicode_codepoint(dpy, cp, delay_us);
+            type_unicode_codepoint(dpy, cp, random_char_delay());
             continue;
         }
 
@@ -208,7 +255,7 @@ static int type_text(const char *text) {
             fprintf(stderr, "无法找到字符 '%c' 对应的键位，已跳过。\n", isprint(ch) ? ch : '?');
             continue;
         }
-        press_key(dpy, keycode, use_shift, delay_us);
+        press_key(dpy, keycode, use_shift, random_char_delay());
     }
 
     XCloseDisplay(dpy);
@@ -233,6 +280,7 @@ static void print_banner(void) {
 }
 
 int main(void) {
+    srand((unsigned int)time(NULL));
     print_banner();
 
     char input[32];
@@ -262,6 +310,7 @@ int main(void) {
             continue;
         }
 
+        print_clipboard_stats(text);
         int rc = type_text(text);
         free(text);
 
