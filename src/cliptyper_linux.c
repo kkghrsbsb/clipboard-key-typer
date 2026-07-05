@@ -297,13 +297,6 @@ int main(void) {
             continue;
         }
 
-        puts("==============5秒后开始粘贴任务==========");
-        for (int i = 5; i >= 1; i--) {
-            printf("==================倒计时 %d 请将光标点击到输入框==================\n", i);
-            fflush(stdout);
-            sleep(1);
-        }
-
         char *text = read_clipboard();
         if (!text) {
             fprintf(stderr, "读取剪切板失败。请确认已安装 wl-paste、xclip 或 xsel，并且剪切板里有文字。\n");
@@ -311,6 +304,13 @@ int main(void) {
         }
 
         print_clipboard_stats(text);
+        puts("==============5秒后开始粘贴任务==========");
+        for (int i = 5; i >= 1; i--) {
+            printf("==================倒计时 %d 请将光标点击到输入框==================\n", i);
+            fflush(stdout);
+            sleep(1);
+        }
+
         int rc = type_text(text);
         free(text);
 

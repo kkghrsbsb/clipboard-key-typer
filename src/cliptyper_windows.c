@@ -134,13 +134,6 @@ int main(void) {
             continue;
         }
 
-        puts("==============5秒后开始粘贴任务==========");
-        for (int i = 5; i >= 1; i--) {
-            printf("==================倒计时 %d 请将光标点击到输入框==================\n", i);
-            fflush(stdout);
-            Sleep(1000);
-        }
-
         wchar_t *text = read_clipboard_text();
         if (!text || text[0] == L'\0') {
             fprintf(stderr, "读取剪切板失败，请确认剪切板里有文字。\n");
@@ -149,6 +142,13 @@ int main(void) {
         }
 
         print_clipboard_stats(text);
+        puts("==============5秒后开始粘贴任务==========");
+        for (int i = 5; i >= 1; i--) {
+            printf("==================倒计时 %d 请将光标点击到输入框==================\n", i);
+            fflush(stdout);
+            Sleep(1000);
+        }
+
         type_text(text);
         free(text);
 
